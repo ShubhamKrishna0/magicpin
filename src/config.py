@@ -68,7 +68,7 @@ class LLMConfig:
     model: str = field(
         default_factory=lambda: os.environ.get("LLM_MODEL", "gpt-4o-mini")
     )
-    timeout: float = 8.0  # seconds — per-call budget for LLM requests
+    timeout: float = 25.0  # seconds — per-call budget for LLM requests
 
 
 def get_llm_config() -> LLMConfig:

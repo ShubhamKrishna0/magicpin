@@ -100,7 +100,7 @@ class Composer:
         message = self._parse_llm_response(raw, trigger, merchant, customer)
 
         # 6. Validate and fix
-        message = self._validate_and_fix(message, category, sent_bodies)
+        message = self._validate_and_fix(message, category, sent_bodies, merchant=merchant)
 
         return message
 
@@ -512,12 +512,19 @@ class Composer:
         message: ComposedMessage,
         category: dict[str, Any],
         sent_bodies: set[str],
+        merchant: dict[str, Any] | None = None,
     ) -> ComposedMessage:
         """Run anti-pattern validation and auto-fix minor violations."""
-        violations = self._validator.validate(message, category, sent_bodies)
+        violations = self._validator.validate(
+            message, category, sent_bodies, merchant=merchant
+        )
 
         if violations:
             logger.info("Violations found: %s — attempting auto-fix", violations)
+            # For price hallucinations, we can't auto-fix — log a warning
+            price_violations = [v for v in violations if v.startswith("price_hallucination")]
+            if price_violations:
+                logger.warning("PRICE HALLUCINATION detected: %s", price_violations)
             message = self._validator.fix(message, violations)
 
         return message

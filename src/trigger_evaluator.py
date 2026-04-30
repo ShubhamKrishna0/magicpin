@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import time
 import uuid
+import logging
 from typing import Any
 
 from src.context_store import ContextStore
 from src.models import ComposedMessage, StoredContext, TickAction
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -33,10 +36,10 @@ _TRIGGER_KIND_TO_CONSENT: dict[str, str] = {
 _MAX_ACTIONS_PER_TICK = 20
 
 # Stop composing when remaining time budget drops below this threshold (seconds).
-_TIME_BUDGET_FLOOR_SECONDS = 2.0
+_TIME_BUDGET_FLOOR_SECONDS = 3.0
 
 # Total tick budget (seconds).
-_TICK_BUDGET_SECONDS = 10.0
+_TICK_BUDGET_SECONDS = 28.0
 
 
 class TriggerEvaluator:
@@ -76,9 +79,12 @@ class TriggerEvaluator:
         # --- Phase 1: gather & filter ---
         valid_triggers: list[tuple[StoredContext, StoredContext, StoredContext, StoredContext | None]] = []
 
+        logger.info("Evaluating %d trigger(s) at now=%s", len(available_trigger_ids), now)
+
         for trigger_id in available_trigger_ids:
             trigger_ctx = self._store.get("trigger", trigger_id)
             if trigger_ctx is None:
+                logger.warning("Trigger %s not found in store, skipping", trigger_id)
                 continue
 
             payload = trigger_ctx.payload
@@ -126,6 +132,8 @@ class TriggerEvaluator:
 
             valid_triggers.append((trigger_ctx, merchant_ctx, category_ctx, customer_ctx))
 
+        logger.info("After filtering: %d valid trigger(s) from %d", len(valid_triggers), len(available_trigger_ids))
+
         # --- Phase 2: sort by urgency descending ---
         valid_triggers.sort(
             key=lambda t: t[0].payload.get("urgency", 0),
@@ -148,14 +156,16 @@ class TriggerEvaluator:
 
             payload = trigger_ctx.payload
             try:
+                logger.info("Composing for trigger %s (kind=%s)", trigger_ctx.context_id, payload.get("kind"))
                 composed: ComposedMessage = await composer.compose(
                     category=category_ctx.payload,
                     merchant=merchant_ctx.payload,
                     trigger=payload,
                     customer=customer_ctx.payload if customer_ctx else None,
                 )
-            except Exception:
-                # Composition failure → skip this trigger
+                logger.info("Composed: %s chars, send_as=%s", len(composed.body), composed.send_as)
+            except Exception as exc:
+                logger.exception("Composition failed for trigger %s: %s", trigger_ctx.context_id, exc)
                 continue
 
             suppression_key = payload.get("suppression_key") or trigger_ctx.context_id

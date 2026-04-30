@@ -343,16 +343,13 @@ class ConversationManager:
         streak = conversation.auto_reply_streak
 
         if streak == 1:
+            conversation.phase = "waiting"
             return {
-                "action": "send",
-                "body": (
-                    "Looks like an auto-reply \U0001f60a When the owner sees "
-                    "this, just reply 'Yes' to continue."
-                ),
-                "cta": "binary_yes_no",
+                "action": "wait",
+                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS,
                 "rationale": (
-                    "Detected auto-reply; one explicit prompt to flag it "
-                    "for the owner."
+                    "Detected WhatsApp Business auto-reply. "
+                    "Owner likely unavailable — waiting 4 hours before retry."
                 ),
             }
 
@@ -360,10 +357,10 @@ class ConversationManager:
             conversation.phase = "waiting"
             return {
                 "action": "wait",
-                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS,
+                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS * 2,
                 "rationale": (
-                    "Same auto-reply twice in a row — owner not at phone. "
-                    "Waiting 4 hours."
+                    "Second consecutive auto-reply — owner still unavailable. "
+                    "Extending wait to 8 hours."
                 ),
             }
 

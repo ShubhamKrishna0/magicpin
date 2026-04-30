@@ -423,13 +423,12 @@ class TestAutoReplyEscalation:
 
     @pytest.mark.asyncio
     async def test_first_auto_reply_with_prior_bot_msg_sends_ack(self) -> None:
-        """With a prior bot message, 1st auto-reply sends acknowledgment."""
+        """With a prior bot message, 1st auto-reply returns wait (detected)."""
         mgr = _make_manager()
         mgr.register_conversation("conv_1", "m1", None, "t1", "Hello merchant!")
         result = await _send_reply(mgr, "Thank you for contacting us")
-        assert result["action"] == "send"
-        assert "body" in result
-        assert "cta" in result
+        assert result["action"] == "wait"
+        assert "auto" in result["rationale"].lower()
 
     @pytest.mark.asyncio
     async def test_first_auto_reply_without_prior_bot_msg_waits(self) -> None:
@@ -475,7 +474,7 @@ class TestAutoReplyEscalation:
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         await _send_reply(mgr, "Tell me more about the offer", turn_number=2)
         result = await _send_reply(mgr, "Thank you for contacting us", turn_number=3)
-        assert result["action"] == "send"  # streak was reset, back to 1st
+        assert result["action"] == "wait"  # 1st auto-reply after reset → wait
 
     @pytest.mark.asyncio
     async def test_streak_resets_on_intent_message(self) -> None:
@@ -485,7 +484,7 @@ class TestAutoReplyEscalation:
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         await _send_reply(mgr, "let's do it", turn_number=2)
         result = await _send_reply(mgr, "Thank you for contacting us", turn_number=3)
-        assert result["action"] == "send"  # streak was reset
+        assert result["action"] == "wait"  # streak was reset, 1st auto-reply → wait
 
     @pytest.mark.asyncio
     async def test_auto_reply_escalation_phase_transitions(self) -> None:
@@ -494,13 +493,13 @@ class TestAutoReplyEscalation:
         mgr.register_conversation("conv_1", "m1", None, "t1", "Hello!")
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         conv = mgr._conversations["conv_1"]
-        assert conv.phase == "initiating"  # 1st auto-reply doesn't change phase
+        assert conv.phase == "waiting"  # 1st auto-reply → waiting
 
         await _send_reply(mgr, "Thank you for contacting us", turn_number=2)
-        assert conv.phase == "waiting"  # 2nd sets to waiting
+        assert conv.phase == "waiting"  # 2nd → still waiting
 
         await _send_reply(mgr, "Thank you for contacting us", turn_number=3)
-        assert conv.phase == "ended"  # 3rd sets to ended
+        assert conv.phase == "ended"  # 3rd → ended
 
 
 # ===========================================================================
@@ -687,8 +686,8 @@ class TestAntiRepetition:
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         await _send_reply(mgr, "Thank you for contacting us", turn_number=2)
         conv = mgr._conversations["conv_1"]
-        # register_conversation adds 1 body, 1st auto-reply adds 1 body, 2nd is wait
-        assert len(conv.sent_bodies) == 2
+        # register_conversation adds 1 body, both auto-replies are wait (no body tracking)
+        assert len(conv.sent_bodies) == 1
 
 
 # ===========================================================================

@@ -75,6 +75,7 @@ class AntiPatternValidator:
         message: ComposedMessage,
         category: dict[str, Any],
         sent_bodies: set[str],
+        merchant: dict[str, Any] | None = None,
     ) -> list[str]:
         """Return a list of violation descriptions. Empty list means valid.
 
@@ -86,6 +87,7 @@ class AntiPatternValidator:
         5. Long preambles
         6. Body matches a previously sent body in sent_bodies
         7. Generic discount format when service-at-price is available
+        8. Price hallucination — prices in body not found in context
         """
         violations: list[str] = []
         body = message.body
@@ -133,6 +135,72 @@ class AntiPatternValidator:
         # Check 7 — generic discount when service-at-price is available
         if _GENERIC_DISCOUNT_PATTERN.search(body) and _has_service_at_price(category):
             violations.append("generic_discount")
+
+        # Check 8 — price hallucination: ₹ prices in body must exist in context
+        if merchant is not None:
+            violations.extend(self._check_price_grounding(body, category, merchant))
+
+        return violations
+
+    @staticmethod
+    def _check_price_grounding(
+        body: str, category: dict[str, Any], merchant: dict[str, Any]
+    ) -> list[str]:
+        """Check that any ₹ price in the body exists in the context data."""
+        # Extract all ₹ prices from the body (e.g., ₹299, ₹1,499, ₹2,999)
+        price_pattern = re.compile(r"₹[\d,]+")
+        body_prices = set()
+        for match in price_pattern.finditer(body):
+            # Normalize: remove ₹ and commas
+            price_str = match.group().replace("₹", "").replace(",", "")
+            try:
+                body_prices.add(int(price_str))
+            except ValueError:
+                continue
+
+        if not body_prices:
+            return []
+
+        # Collect all valid prices from context
+        valid_prices: set[int] = set()
+
+        # From merchant offers
+        for offer in merchant.get("offers", []):
+            title = offer.get("title", "")
+            for m in re.finditer(r"₹[\d,]+", title):
+                p = m.group().replace("₹", "").replace(",", "")
+                try:
+                    valid_prices.add(int(p))
+                except ValueError:
+                    pass
+            val = offer.get("value")
+            if val:
+                try:
+                    valid_prices.add(int(str(val).replace(",", "")))
+                except ValueError:
+                    pass
+
+        # From category offer catalog
+        for offer in category.get("offer_catalog", []):
+            title = offer.get("title", "")
+            for m in re.finditer(r"₹[\d,]+", title):
+                p = m.group().replace("₹", "").replace(",", "")
+                try:
+                    valid_prices.add(int(p))
+                except ValueError:
+                    pass
+            val = offer.get("value")
+            if val:
+                try:
+                    valid_prices.add(int(str(val).replace(",", "")))
+                except ValueError:
+                    pass
+
+        # Check for ungrounded prices
+        violations = []
+        for price in body_prices:
+            if price not in valid_prices:
+                violations.append(f"price_hallucination:₹{price}")
 
         return violations
 
