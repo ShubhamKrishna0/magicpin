@@ -243,26 +243,49 @@ class Composer:
         """Build the category section of the context block."""
         lines = ["=== CATEGORY ==="]
         lines.append(f"Slug: {category.get('slug', 'unknown')}")
+        lines.append(f"Display name: {category.get('display_name', category.get('slug', 'unknown'))}")
 
         voice = category.get("voice", {})
         lines.append(f"Voice tone: {voice.get('tone', 'professional')}")
+        lines.append(f"Register: {voice.get('register', 'professional')}")
         taboo = voice.get("vocab_taboo", [])
-        lines.append(f"Taboo words: {', '.join(taboo) if taboo else '(none)'}")
+        lines.append(f"Taboo words (NEVER use): {', '.join(taboo) if taboo else '(none)'}")
+        allowed = voice.get("vocab_allowed", [])
+        if allowed:
+            lines.append(f"Allowed vocabulary: {', '.join(allowed[:10])}")
 
         peer_stats = category.get("peer_stats", {})
-        lines.append(
-            f"Peer stats: avg_rating={peer_stats.get('avg_rating', 'N/A')}, "
-            f"avg_ctr={peer_stats.get('avg_ctr', 'N/A')}"
-        )
+        if peer_stats:
+            lines.append("Peer stats (use for comparison):")
+            for k, v in peer_stats.items():
+                lines.append(f"  {k}: {v}")
+
+        # Offer catalog — available service-at-price templates
+        offer_catalog = category.get("offer_catalog", [])
+        if offer_catalog:
+            catalog_items = [
+                f"  - {o.get('title', '')} (₹{o.get('value', '?')}, {o.get('audience', '')})"
+                for o in offer_catalog[:8]
+            ]
+            lines.append("Offer catalog (use these price formats):\n" + "\n".join(catalog_items))
 
         digest = category.get("digest", [])
         if digest:
-            digest_items = []
+            lines.append("Digest items (cite these sources):")
             for item in digest[:5]:
                 title = item.get("title", "")
                 source = item.get("source", "")
-                digest_items.append(f"  - {title} ({source})")
-            lines.append("Digest items:\n" + "\n".join(digest_items))
+                summary = item.get("summary", "")
+                trial_n = item.get("trial_n")
+                lines.append(f"  - [{item.get('kind', '')}] {title}")
+                lines.append(f"    Source: {source}")
+                if trial_n:
+                    lines.append(f"    Trial N: {trial_n}")
+                if summary:
+                    lines.append(f"    Summary: {summary}")
+                actionable = item.get("actionable", "")
+                if actionable:
+                    lines.append(f"    Actionable: {actionable}")
 
         seasonal = category.get("seasonal_beats", [])
         if seasonal:
@@ -275,7 +298,7 @@ class Composer:
         trends = category.get("trend_signals", [])
         if trends:
             trend_items = [
-                f"  - {t.get('query', '')}: {t.get('delta_yoy', 0):+.0%} YoY"
+                f"  - \"{t.get('query', '')}\": {t.get('delta_yoy', 0):+.0%} YoY, segment: {t.get('segment_age', 'all')}"
                 for t in trends
             ]
             lines.append("Trend signals:\n" + "\n".join(trend_items))
@@ -360,24 +383,36 @@ class Composer:
     @staticmethod
     def _build_trigger_block(trigger: dict[str, Any]) -> str:
         """Build the trigger section of the context block."""
-        lines = ["=== TRIGGER ==="]
+        lines = ["=== TRIGGER (why this message NOW) ==="]
         lines.append(f"Kind: {trigger.get('kind', 'unknown')}")
         lines.append(f"Scope: {trigger.get('scope', 'merchant')}")
         lines.append(f"Source: {trigger.get('source', 'internal')}")
-        lines.append(f"Urgency: {trigger.get('urgency', 1)}")
+        lines.append(f"Urgency: {trigger.get('urgency', 1)}/5")
 
-        payload = {
-            k: v
-            for k, v in trigger.items()
-            if k not in ("kind", "scope", "source", "urgency", "suppression_key",
-                         "expires_at", "merchant_id", "customer_id", "id")
-        }
-        if payload:
-            lines.append(f"Payload: {json.dumps(payload, default=str)}")
+        # Include ALL trigger data for the LLM to anchor on
+        lines.append(f"Suppression key: {trigger.get('suppression_key', 'none')}")
 
-        lines.append(
-            f"Suppression key: {trigger.get('suppression_key', 'none')}"
-        )
+        # Include the nested payload if it exists
+        nested_payload = trigger.get("payload", {})
+        if nested_payload and isinstance(nested_payload, dict):
+            lines.append("Trigger payload data (USE these facts in your message):")
+            for k, v in nested_payload.items():
+                if isinstance(v, (list, dict)):
+                    lines.append(f"  {k}: {json.dumps(v, default=str)}")
+                else:
+                    lines.append(f"  {k}: {v}")
+
+        # Also include top-level trigger fields that aren't metadata
+        skip_keys = {"kind", "scope", "source", "urgency", "suppression_key",
+                     "expires_at", "merchant_id", "customer_id", "id", "payload"}
+        extra = {k: v for k, v in trigger.items() if k not in skip_keys and v is not None}
+        if extra:
+            lines.append("Additional trigger data:")
+            for k, v in extra.items():
+                if isinstance(v, (list, dict)):
+                    lines.append(f"  {k}: {json.dumps(v, default=str)}")
+                else:
+                    lines.append(f"  {k}: {v}")
 
         return "\n".join(lines)
 

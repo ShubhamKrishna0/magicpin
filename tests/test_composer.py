@@ -344,7 +344,7 @@ class TestContextBlockBuilding:
         block = composer._build_context_block(
             _make_category(), _make_merchant(), _make_trigger()
         )
-        assert "=== TRIGGER ===" in block
+        assert "=== TRIGGER" in block
         assert "research_digest" in block
 
     def test_context_block_has_customer_section_when_present(self) -> None:
@@ -546,7 +546,7 @@ class TestComposeIntegration:
         # User prompt should contain context block
         assert "=== CATEGORY ===" in user_prompt
         assert "=== MERCHANT ===" in user_prompt
-        assert "=== TRIGGER ===" in user_prompt
+        assert "=== TRIGGER" in user_prompt
 
     @pytest.mark.asyncio
     async def test_compose_with_sent_bodies_includes_them(self) -> None:

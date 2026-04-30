@@ -65,137 +65,234 @@ OUTPUT FORMAT — respond with ONLY this JSON, no other text:
 
 _TRIGGER_INSTRUCTIONS: dict[str, str] = {
     "research_digest": (
-        "This is a research digest trigger. Lead with the source citation "
-        "(journal, page). Include trial size and key finding. Connect to the "
-        "merchant's patient cohort if relevant signals exist. Offer to pull "
-        "the abstract + draft a patient-ed WhatsApp. Use curiosity + reciprocity levers."
+        "This is a research digest trigger. You MUST:\n"
+        "1. Lead with the exact source citation from the digest (journal name, page number)\n"
+        "2. Include the exact trial size (N=) and key percentage finding from the digest\n"
+        "3. Connect to the merchant's specific patient cohort using their customer_aggregate data\n"
+        "4. Compare the merchant's CTR to peer_stats.avg_ctr if below peer\n"
+        "5. Offer to pull the abstract + draft a patient-ed WhatsApp they can share\n"
+        "Compulsion levers: curiosity ('worth a look') + reciprocity ('I'll pull it for you')\n"
+        "Example structure: '{Owner}, {source} landed. {finding with numbers}. "
+        "Relevant to your {specific cohort}. Want me to pull it + draft a patient WhatsApp? — {citation}'"
     ),
     "recall_due": (
-        "This is a customer recall reminder. Set send_as to 'merchant_on_behalf'. "
-        "Use the merchant's business name, not Vera. Include specific appointment "
-        "slots from the trigger payload. Include service price from the merchant's "
-        "active offers. Honor the customer's language preference. Use loss aversion "
-        "(overdue window) + effort externalization (slots ready) levers."
+        "This is a customer recall reminder. Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. Use the merchant's business name (NOT Vera) as the sender\n"
+        "2. Include the EXACT appointment slots from trigger payload (dates + times)\n"
+        "3. Include the EXACT service price from merchant's active offers (e.g., '₹299')\n"
+        "4. Calculate months since last visit from the trigger payload dates\n"
+        "5. Honor the customer's language_pref (use Hindi-English mix if 'hi-en mix')\n"
+        "6. Reference the customer's preferred_slots from preferences\n"
+        "Compulsion levers: loss aversion (overdue window) + effort externalization (slots ready)\n"
+        "CRITICAL: Only use prices that appear in the merchant's active offers list."
     ),
     "perf_dip": (
-        "This is a performance dip alert. Include the specific metric and delta "
-        "percentage. If is_expected_seasonal is true, reframe as normal and advise "
-        "saving spend. If not seasonal, flag as concerning and propose a concrete "
-        "action. Use the merchant's actual member/customer count. Use loss aversion "
-        "+ social proof (peer comparison) levers."
+        "This is a performance dip alert. You MUST:\n"
+        "1. State the EXACT metric name and delta percentage from the trigger payload\n"
+        "2. State the merchant's actual current numbers (views, calls, CTR from performance)\n"
+        "3. Compare to peer_stats (e.g., 'peer avg CTR is X, yours is Y')\n"
+        "4. Propose ONE specific concrete action (not vague 'improve your profile')\n"
+        "5. If the merchant has signals like 'stale_posts' or 'no_active_offers', reference them\n"
+        "Compulsion levers: loss aversion (metric drop) + social proof (peer comparison)"
     ),
     "seasonal_perf_dip": (
-        "This is a seasonal performance dip alert. Include the specific metric and "
-        "delta percentage. Since is_expected_seasonal is true, reframe as normal "
-        "and advise saving spend. Reference the season note. Use the merchant's "
-        "actual member/customer count. Use loss aversion + social proof (peer "
-        "comparison) levers."
+        "This is a SEASONAL performance dip — expected and normal. You MUST:\n"
+        "1. State the EXACT metric and delta percentage from trigger payload\n"
+        "2. Explicitly say this is the normal seasonal pattern (reference season_note)\n"
+        "3. Recommend saving ad spend for the recovery period\n"
+        "4. Use the merchant's actual member/customer count from customer_aggregate\n"
+        "5. Propose a retention-focused action for the dip period\n"
+        "Compulsion levers: anxiety pre-emption (dip is normal) + specificity (numbers)"
     ),
     "active_planning_intent": (
-        "The merchant has expressed planning intent. Produce a COMPLETE drafted "
-        "artifact (pricing tiers, program structure, schedule) — NOT more qualifying "
-        "questions. Include specific numbers, prices, and timelines. Reference the "
-        "merchant's locality and existing offerings. Use effort externalization "
-        "(drafted artifact ready) + specificity levers."
+        "The merchant explicitly asked for a plan. You MUST:\n"
+        "1. Produce a COMPLETE drafted artifact — NOT more questions\n"
+        "2. Include specific pricing tiers with exact ₹ amounts\n"
+        "3. Include a schedule/timeline\n"
+        "4. Reference the merchant's locality for delivery/service radius\n"
+        "5. Reference their existing offers to build on\n"
+        "6. End with 'Want me to [specific next step]?'\n"
+        "Compulsion levers: effort externalization (artifact ready) + specificity (prices/structure)\n"
+        "CRITICAL: Only use prices from the merchant's existing offers or category catalog."
     ),
     "supply_alert": (
-        "This is an urgent supply/compliance alert. Include affected batch numbers "
-        "and manufacturer name. Derive the count of affected customers from the "
-        "merchant's customer aggregate. Offer to draft the customer notification + "
-        "workflow. Use urgency + specificity + reciprocity levers."
+        "This is an URGENT supply/compliance alert. You MUST:\n"
+        "1. Include the EXACT affected batch numbers from trigger payload\n"
+        "2. Include the manufacturer name from trigger payload\n"
+        "3. Derive affected customer count from merchant's chronic_rx_count or customer_aggregate\n"
+        "4. Offer to draft the customer notification + replacement workflow\n"
+        "5. Frame as 'sub-potency, no safety risk' if applicable — don't alarm\n"
+        "Compulsion levers: urgency + specificity (batch numbers) + reciprocity (customer list ready)"
     ),
     "renewal_due": (
-        "Subscription renewal is due. Include days remaining, plan name, and renewal "
-        "amount. Reference the merchant's performance to show value. Use loss "
-        "aversion (profile maintenance pauses) + specificity levers."
+        "Subscription renewal is due. You MUST:\n"
+        "1. State EXACT days remaining from trigger payload\n"
+        "2. State the plan name and renewal amount from trigger payload\n"
+        "3. Reference the merchant's actual performance numbers to show value delivered\n"
+        "4. Mention what stops working if they don't renew (profile maintenance pauses)\n"
+        "Compulsion levers: loss aversion (what they lose) + specificity (their numbers)"
     ),
     "competitor_opened": (
-        "A new competitor opened nearby. Include competitor name, distance, and "
-        "their offer. Frame as awareness, not alarm. Suggest differentiation "
-        "strategy based on the merchant's strengths. Use curiosity + loss aversion levers."
+        "A new competitor opened nearby. You MUST:\n"
+        "1. Include the EXACT competitor name from trigger payload\n"
+        "2. Include the EXACT distance (km) from trigger payload\n"
+        "3. Include their offer/price from trigger payload\n"
+        "4. Frame as awareness, NOT alarm\n"
+        "5. Suggest differentiation based on the merchant's review_themes or signals\n"
+        "Compulsion levers: curiosity ('want to see their listing?') + loss aversion"
     ),
     "review_theme_emerged": (
-        "A review theme has emerged. Include the theme, occurrence count, and a "
-        "common quote. Propose a concrete action to address it. Use specificity + "
-        "reciprocity levers."
+        "A review theme has emerged. You MUST:\n"
+        "1. State the EXACT theme name from trigger payload\n"
+        "2. State the EXACT occurrence count (Nx in 30 days) from trigger payload\n"
+        "3. Include the common_quote from trigger payload in quotes\n"
+        "4. Propose ONE specific concrete action to address it\n"
+        "Compulsion levers: specificity (quote + count) + reciprocity (I noticed this)"
     ),
     "milestone_reached": (
-        "The merchant is approaching or has reached a milestone. Include the metric, "
-        "current value, and milestone value. Celebrate the achievement and suggest "
-        "the next goal. Use social proof + curiosity levers."
+        "The merchant is approaching/reached a milestone. You MUST:\n"
+        "1. State the EXACT metric name from trigger payload\n"
+        "2. State the EXACT current value and milestone value from trigger payload\n"
+        "3. Celebrate briefly, then suggest the next goal\n"
+        "4. Propose a concrete action to capitalize (e.g., 'share on Google post')\n"
+        "Compulsion levers: social proof (achievement) + curiosity (next milestone)"
     ),
     "ipl_match_today": (
-        "IPL match happening today. Include match details (teams, venue, time). "
-        "Provide data-informed recommendation — Saturday matches reduce dine-in, "
-        "push delivery. Reference the merchant's existing offers. Use specificity + "
-        "contrarian insight levers."
+        "IPL match happening today. You MUST:\n"
+        "1. Include EXACT match details from trigger payload (teams, venue, time)\n"
+        "2. Note whether it's a weeknight or weekend from trigger payload\n"
+        "3. Give a DATA-INFORMED recommendation (weekend = -12% dine-in, push delivery)\n"
+        "4. Reference the merchant's existing active offers\n"
+        "5. Offer to draft specific deliverables (Swiggy banner, Insta story)\n"
+        "Compulsion levers: specificity (match data) + contrarian insight (skip promo, push delivery)"
     ),
     "customer_lapsed_hard": (
-        "Customer has lapsed (hard). Set send_as to 'merchant_on_behalf'. Use "
-        "no-shame framing ('happens to most'). Reference the customer's previous "
-        "focus/services. Offer a specific new class/service that matches their "
-        "goals. Use no-shame + effort externalization + single binary CTA levers."
+        "Customer has lapsed (hard — 2+ months). Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. Use the merchant's business name as sender\n"
+        "2. State approximate weeks/months since last visit from trigger payload\n"
+        "3. Use NO-SHAME framing ('happens to most members')\n"
+        "4. Reference the customer's previous focus/services from relationship data\n"
+        "5. Offer a specific service that matches their past goals\n"
+        "6. End with single binary CTA: 'Reply YES — no commitment, no auto-charge'\n"
+        "Compulsion levers: no-shame + effort externalization + single binary CTA\n"
+        "CRITICAL: Only use prices from the merchant's active offers."
     ),
     "customer_lapsed_soft": (
-        "Customer has lapsed (soft). Set send_as to 'merchant_on_behalf'. Use "
-        "no-shame framing ('happens to most'). Reference the customer's previous "
-        "focus/services. Offer a specific new class/service that matches their "
-        "goals. Use no-shame + effort externalization + single binary CTA levers."
+        "Customer has lapsed (soft — 3-6 months). Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. Use the merchant's business name as sender\n"
+        "2. State approximate months since last visit\n"
+        "3. Use warm, no-pressure framing\n"
+        "4. Reference the customer's previous services from relationship data\n"
+        "5. Offer a specific service matching their history\n"
+        "6. End with single binary CTA\n"
+        "Compulsion levers: no-shame + effort externalization + single binary CTA\n"
+        "CRITICAL: Only use prices from the merchant's active offers."
     ),
     "chronic_refill_due": (
-        "Customer's chronic medication refill is due. Set send_as to "
-        "'merchant_on_behalf'. Include molecule names, stock-out date, and delivery "
-        "option. For senior citizens, use respectful salutation (Namaste, ji suffix) "
-        "and offer call option. Use specificity + effort externalization levers."
+        "Customer's chronic medication refill is due. Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. Include ALL molecule names from trigger payload\n"
+        "2. Include the EXACT stock-out date from trigger payload\n"
+        "3. Include delivery option if delivery_address_saved is true\n"
+        "4. For senior citizens (age_band 65+): use 'Namaste', 'ji' suffix, offer call option\n"
+        "5. If merchant has senior discount offer, include the exact discount\n"
+        "6. Include total price if calculable from context, otherwise omit\n"
+        "Compulsion levers: specificity (molecule names, date) + effort externalization\n"
+        "CRITICAL: Do NOT invent prices. Only use prices from merchant's active offers."
     ),
     "trial_followup": (
-        "Customer completed a trial. Set send_as to 'merchant_on_behalf'. Reference "
-        "the trial date and offer next session options. Use effort externalization + "
-        "single binary CTA levers."
+        "Customer completed a trial. Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. Reference the EXACT trial date from trigger payload\n"
+        "2. Include next session options (dates/times) from trigger payload\n"
+        "3. Reference what the trial was for from customer's services\n"
+        "4. End with single binary CTA\n"
+        "Compulsion levers: effort externalization (slot ready) + single binary CTA"
     ),
     "festival_upcoming": (
-        "A festival is approaching. Include festival name and days until. Suggest "
-        "category-relevant preparation. Use specificity + social proof levers."
+        "A festival is approaching. You MUST:\n"
+        "1. State the EXACT festival name and days until from trigger payload\n"
+        "2. Suggest category-relevant preparation specific to this merchant\n"
+        "3. Reference the merchant's existing offers or services\n"
+        "4. Propose a concrete action (draft a festival post, create a special offer)\n"
+        "Compulsion levers: specificity (days until) + social proof (what peers do)"
     ),
     "dormant_with_vera": (
-        "Merchant hasn't engaged with Vera recently. Include days since last message "
-        "and last topic. Offer a fresh hook unrelated to the last topic. Use "
-        "curiosity + reciprocity levers."
+        "Merchant hasn't engaged with Vera recently. You MUST:\n"
+        "1. State EXACT days since last message from trigger payload\n"
+        "2. Reference the last topic from trigger payload\n"
+        "3. Offer a FRESH hook unrelated to the last topic\n"
+        "4. Use a curiosity-driven question or a new data point\n"
+        "Compulsion levers: curiosity + reciprocity ('I noticed something about your profile')"
     ),
     "cde_opportunity": (
-        "CDE/webinar opportunity. Include event title, date, credits, and fee. "
-        "Use specificity + effort externalization levers."
+        "CDE/webinar opportunity. You MUST:\n"
+        "1. Include the EXACT event title from the category digest\n"
+        "2. Include the EXACT date and time\n"
+        "3. Include credits count and fee from trigger payload\n"
+        "4. Mention the speaker if available in the digest\n"
+        "Compulsion levers: specificity (date, credits) + effort externalization ('I can register you')"
     ),
     "gbp_unverified": (
-        "Merchant's Google Business Profile is unverified. Include the verification "
-        "path and estimated uplift. Use loss aversion + specificity levers."
+        "Merchant's Google Business Profile is unverified. You MUST:\n"
+        "1. State the verification path from trigger payload (postcard/phone)\n"
+        "2. State the EXACT estimated uplift percentage from trigger payload\n"
+        "3. Explain what they're missing (verified badge, edit control)\n"
+        "4. Offer to guide them through the process\n"
+        "Compulsion levers: loss aversion (missing X% uplift) + effort externalization"
     ),
     "winback_eligible": (
-        "Merchant's subscription expired. Include days since expiry and performance "
-        "dip. Use loss aversion + specificity levers."
+        "Merchant's subscription expired. You MUST:\n"
+        "1. State EXACT days since expiry from trigger payload\n"
+        "2. State the performance dip percentage from trigger payload\n"
+        "3. Reference what stopped working (profile maintenance, post scheduling)\n"
+        "4. Reference their lapsed customer count if available\n"
+        "Compulsion levers: loss aversion (what they lost) + specificity (dip numbers)"
     ),
     "wedding_package_followup": (
-        "Bridal package followup. Set send_as to 'merchant_on_behalf'. Include days "
-        "to wedding and next step window. Use urgency + specificity levers."
+        "Bridal package followup. Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. State EXACT days to wedding from trigger payload\n"
+        "2. Reference the trial they completed and when\n"
+        "3. Suggest the next step window from trigger payload\n"
+        "4. Include specific pricing from merchant's offers if available\n"
+        "Compulsion levers: urgency (wedding countdown) + specificity (days, program)"
     ),
     "category_seasonal": (
-        "Seasonal demand shift. Include specific trends with percentages. Recommend "
-        "shelf/inventory action. Use specificity + reciprocity levers."
+        "Seasonal demand shift. You MUST:\n"
+        "1. List EACH specific trend with its EXACT percentage from trigger payload\n"
+        "2. Recommend specific shelf/inventory actions\n"
+        "3. Reference the merchant's current offers to suggest adjustments\n"
+        "Compulsion levers: specificity (trend percentages) + reciprocity (I spotted this for you)"
     ),
     "regulation_change": (
-        "A regulation or compliance change has been announced. Include the authority, "
-        "deadline, and specific impact. Propose a concrete compliance action. Use "
-        "urgency + specificity levers."
+        "A regulation/compliance change announced. You MUST:\n"
+        "1. State the EXACT authority name from the category digest\n"
+        "2. State the EXACT deadline date from trigger payload\n"
+        "3. State the specific impact (what changes, what's affected)\n"
+        "4. Propose a concrete compliance action with timeline\n"
+        "Compulsion levers: urgency (deadline) + specificity (exact requirements)"
     ),
     "perf_spike": (
-        "Performance spike detected. Include the specific metric and positive delta. "
-        "Identify the likely driver. Suggest how to capitalize on the momentum. Use "
-        "social proof + curiosity levers."
+        "Performance spike detected. You MUST:\n"
+        "1. State the EXACT metric and positive delta percentage from trigger payload\n"
+        "2. Identify the likely driver from trigger payload if available\n"
+        "3. Suggest how to capitalize (double down on what's working)\n"
+        "4. Reference the merchant's current offers or recent actions\n"
+        "Compulsion levers: social proof (momentum) + curiosity (what's driving it)"
     ),
     "curious_ask_due": (
-        "Time for a curious ask. Ask the merchant a low-stakes question about their "
-        "business. Offer to turn their answer into content (Google post, WhatsApp "
-        "reply). Use asking-the-merchant + reciprocity levers."
+        "Time for a curious ask — engagement-building question. You MUST:\n"
+        "1. Ask ONE specific low-stakes question about their business this week\n"
+        "2. Offer to turn their answer into content (Google post + WhatsApp reply template)\n"
+        "3. Reference something specific about their business (category, locality)\n"
+        "4. Keep it under 3 sentences\n"
+        "Compulsion levers: asking-the-merchant + reciprocity (I'll make content from it)"
+    ),
+    "appointment_tomorrow": (
+        "Customer has an appointment tomorrow. Set send_as='merchant_on_behalf'. You MUST:\n"
+        "1. Confirm the appointment date and time\n"
+        "2. Use the merchant's business name as sender\n"
+        "3. Include any preparation instructions relevant to the service\n"
+        "4. Honor the customer's language preference\n"
+        "Compulsion levers: specificity (date/time) + effort externalization (reminder ready)"
     ),
 }
 
@@ -238,9 +335,11 @@ COMPOSITION RULES (STRICT):
 1. ONE primary CTA only, positioned as the FINAL sentence
 2. NO URLs in the message body
 3. NO preambles or re-introductions
-4. Reference ONLY facts from the conversation history and provided contexts
-5. Keep messages concise — WhatsApp readability
-6. Do NOT repeat any message body that was already sent in this conversation
+4. ONLY reference facts from the conversation history and provided contexts — NEVER fabricate prices, dates, or data
+5. If a price is mentioned, it MUST come from the merchant's active offers in the context
+6. Keep messages concise — WhatsApp readability (under 150 words)
+7. Do NOT repeat any message body that was already sent in this conversation
+8. Honor language preferences — use Hindi-English code-mix if the merchant/customer uses it
 
 PREVIOUSLY SENT BODIES (do NOT repeat these):
 {sent_bodies}
@@ -250,20 +349,26 @@ OUTPUT FORMAT — respond with ONLY this JSON, no other text:
   "action": "send",
   "body": "the WhatsApp reply message",
   "cta": "open_ended | binary_yes_no | none",
-  "rationale": "1-2 sentences explaining the reply strategy"
+  "rationale": "2 sentences: what context data was used, what compulsion lever"
 }}"""
 
 REPLY_INTENT_COMMITTED_INSTRUCTIONS = (
-    "The merchant has committed to an action. Switch to ACTION MODE immediately. "
-    "Produce the next concrete step — draft the artifact, start the process, "
-    "confirm the action. Do NOT ask more qualifying questions. Include measurable "
-    "scope or deliverables (e.g., 'drafting for 40 patients', 'live in 10 min')."
+    "The merchant has committed to an action (said 'yes', 'let's do it', 'go ahead'). "
+    "Switch to ACTION MODE immediately. You MUST:\n"
+    "1. Produce the next concrete step — draft the artifact, confirm the action, start the process\n"
+    "2. Do NOT ask more qualifying questions\n"
+    "3. Include measurable scope or deliverables (e.g., 'drafting for 40 patients', 'live in 10 min')\n"
+    "4. Use words like 'done', 'sending', 'drafting', 'here', 'confirm', 'proceed'\n"
+    "5. Reference specific numbers from the merchant's context (customer count, offer details)"
 )
 
 REPLY_NORMAL_INSTRUCTIONS = (
-    "Continue the conversation naturally. Build on what was discussed. "
-    "Be helpful and specific. If the merchant asked a question, answer it directly. "
-    "If they shared information, acknowledge it and move the conversation forward."
+    "Continue the conversation naturally. You MUST:\n"
+    "1. Build on what was discussed — reference specific details from the conversation\n"
+    "2. If the merchant asked a question, answer it directly with facts from the context\n"
+    "3. If they shared information, acknowledge it and propose a concrete next step\n"
+    "4. Include at least one specific number or fact from the merchant's context\n"
+    "5. NEVER fabricate prices, statistics, or data not in the provided context"
 )
 
 # ---------------------------------------------------------------------------
