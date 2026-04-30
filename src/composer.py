@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Any
 
 from src.context_store import ContextStore
@@ -230,7 +231,7 @@ class Composer:
         parts.append(self._build_merchant_block(merchant))
 
         # === TRIGGER ===
-        parts.append(self._build_trigger_block(trigger))
+        parts.append(self._build_trigger_block(trigger, category))
 
         # === CUSTOMER (if present) ===
         if customer is not None:
@@ -277,7 +278,10 @@ class Composer:
                 source = item.get("source", "")
                 summary = item.get("summary", "")
                 trial_n = item.get("trial_n")
+                item_id = item.get("id", "")
                 lines.append(f"  - [{item.get('kind', '')}] {title}")
+                if item_id:
+                    lines.append(f"    ID: {item_id}")
                 lines.append(f"    Source: {source}")
                 if trial_n:
                     lines.append(f"    Trial N: {trial_n}")
@@ -286,6 +290,13 @@ class Composer:
                 actionable = item.get("actionable", "")
                 if actionable:
                     lines.append(f"    Actionable: {actionable}")
+                # Include date if present (for CDE events)
+                date = item.get("date")
+                if date:
+                    lines.append(f"    Date: {date}")
+                credits = item.get("credits")
+                if credits:
+                    lines.append(f"    Credits: {credits}")
 
         seasonal = category.get("seasonal_beats", [])
         if seasonal:
@@ -312,10 +323,12 @@ class Composer:
 
         identity = merchant.get("identity", {})
         lines.append(f"Name: {identity.get('name', 'Unknown')}")
-        lines.append(f"Owner: {identity.get('owner_first_name', 'Unknown')}")
+        lines.append(f"Owner first name: {identity.get('owner_first_name', 'Unknown')}")
         lines.append(
-            f"City/Locality: {identity.get('city', '')}, "
-            f"{identity.get('locality', '')}"
+            f"City: {identity.get('city', '')}"
+        )
+        lines.append(
+            f"Locality: {identity.get('locality', '')}"
         )
         languages = identity.get("languages", [])
         lines.append(f"Languages: {', '.join(languages) if languages else 'en'}")
@@ -331,15 +344,18 @@ class Composer:
         lines.append(
             f"Performance (30d): views={perf.get('views', 0)}, "
             f"calls={perf.get('calls', 0)}, "
-            f"ctr={perf.get('ctr', 0)}"
+            f"directions={perf.get('directions', 0)}, "
+            f"ctr={perf.get('ctr', 0)}, "
+            f"leads={perf.get('leads', 0)}"
         )
         delta = perf.get("delta_7d", {})
         if delta:
-            views_pct = delta.get("views_pct", 0)
-            calls_pct = delta.get("calls_pct", 0)
-            lines.append(
-                f"7d deltas: views {views_pct:+.0%}, calls {calls_pct:+.0%}"
-            )
+            delta_parts = []
+            for k, v in delta.items():
+                if isinstance(v, (int, float)):
+                    delta_parts.append(f"{k} {v:+.0%}")
+            if delta_parts:
+                lines.append(f"7d deltas: {', '.join(delta_parts)}")
 
         offers = merchant.get("offers", [])
         if offers:
@@ -357,13 +373,16 @@ class Composer:
 
         cust_agg = merchant.get("customer_aggregate", {})
         if cust_agg:
-            lines.append(f"Customer aggregate: {json.dumps(cust_agg)}")
+            agg_parts = []
+            for k, v in cust_agg.items():
+                agg_parts.append(f"{k}={v}")
+            lines.append(f"Customer aggregate: {', '.join(agg_parts)}")
 
         review_themes = merchant.get("review_themes", [])
         if review_themes:
             theme_items = [
                 f"  - {t.get('theme', '')}: {t.get('sentiment', '')} "
-                f"({t.get('occurrences_30d', 0)}x) "
+                f"({t.get('occurrences_30d', 0)}x in 30d) "
                 f"\"{t.get('common_quote', '')}\""
                 for t in review_themes
             ]
@@ -381,8 +400,26 @@ class Composer:
         return "\n".join(lines)
 
     @staticmethod
-    def _build_trigger_block(trigger: dict[str, Any]) -> str:
-        """Build the trigger section of the context block."""
+    def _resolve_digest_item(
+        category: dict[str, Any], item_id: str
+    ) -> dict[str, Any] | None:
+        """Look up a digest item by ID from the category context."""
+        digest = category.get("digest", [])
+        for item in digest:
+            if item.get("id") == item_id:
+                return item
+        return None
+
+    def _build_trigger_block(
+        self,
+        trigger: dict[str, Any],
+        category: dict[str, Any] | None = None,
+    ) -> str:
+        """Build the trigger section of the context block.
+
+        Resolves digest item references and formats all payload data
+        prominently for the LLM.
+        """
         lines = ["=== TRIGGER (why this message NOW) ==="]
         lines.append(f"Kind: {trigger.get('kind', 'unknown')}")
         lines.append(f"Scope: {trigger.get('scope', 'merchant')}")
@@ -397,10 +434,54 @@ class Composer:
         if nested_payload and isinstance(nested_payload, dict):
             lines.append("Trigger payload data (USE these facts in your message):")
             for k, v in nested_payload.items():
-                if isinstance(v, (list, dict)):
+                if isinstance(v, list):
+                    # Format lists more readably
+                    if v and isinstance(v[0], dict):
+                        lines.append(f"  {k}:")
+                        for item in v:
+                            if isinstance(item, dict):
+                                parts = [f"{ik}={iv}" for ik, iv in item.items()]
+                                lines.append(f"    - {', '.join(parts)}")
+                            else:
+                                lines.append(f"    - {item}")
+                    else:
+                        lines.append(f"  {k}: {json.dumps(v, default=str)}")
+                elif isinstance(v, dict):
                     lines.append(f"  {k}: {json.dumps(v, default=str)}")
                 else:
                     lines.append(f"  {k}: {v}")
+
+        # Resolve digest item references for research_digest, cde_opportunity, etc.
+        if category is not None:
+            top_item_id = (
+                nested_payload.get("top_item_id")
+                or nested_payload.get("digest_item_id")
+                or nested_payload.get("alert_id")
+            )
+            if top_item_id:
+                resolved = self._resolve_digest_item(category, top_item_id)
+                if resolved:
+                    lines.append(f"\n  RESOLVED DIGEST ITEM (id={top_item_id}):")
+                    lines.append(f"    Title: {resolved.get('title', '')}")
+                    lines.append(f"    Source: {resolved.get('source', '')}")
+                    trial_n = resolved.get("trial_n")
+                    if trial_n:
+                        lines.append(f"    Trial N: {trial_n}")
+                    summary = resolved.get("summary", "")
+                    if summary:
+                        lines.append(f"    Summary: {summary}")
+                    actionable = resolved.get("actionable", "")
+                    if actionable:
+                        lines.append(f"    Actionable: {actionable}")
+                    patient_segment = resolved.get("patient_segment", "")
+                    if patient_segment:
+                        lines.append(f"    Patient segment: {patient_segment}")
+                    date = resolved.get("date")
+                    if date:
+                        lines.append(f"    Date: {date}")
+                    credits = resolved.get("credits")
+                    if credits:
+                        lines.append(f"    Credits: {credits}")
 
         # Also include top-level trigger fields that aren't metadata
         skip_keys = {"kind", "scope", "source", "urgency", "suppression_key",
@@ -427,21 +508,34 @@ class Composer:
             f"Language pref: {identity.get('language_pref', 'english')}"
         )
         lines.append(f"Age band: {identity.get('age_band', 'unknown')}")
+        senior = identity.get("senior_citizen")
+        if senior:
+            lines.append("Senior citizen: YES (use Namaste, ji suffix)")
 
         lines.append(f"State: {customer.get('state', 'unknown')}")
 
         rel = customer.get("relationship", {})
         lines.append(
             f"Relationship: {rel.get('visits_total', 0)} visits, "
+            f"first visit {rel.get('first_visit', 'N/A')}, "
             f"last visit {rel.get('last_visit', 'N/A')}"
         )
         services = rel.get("services_received", [])
         if services:
-            lines.append(f"Services: {', '.join(services[:10])}")
+            lines.append(f"Services received: {', '.join(services[:10])}")
+        ltv = rel.get("lifetime_value")
+        if ltv:
+            lines.append(f"Lifetime value: ₹{ltv}")
+        chronic = rel.get("chronic_conditions", [])
+        if chronic:
+            lines.append(f"Chronic conditions: {', '.join(chronic)}")
 
         prefs = customer.get("preferences", {})
         if prefs:
-            lines.append(f"Preferences: {json.dumps(prefs)}")
+            pref_parts = []
+            for k, v in prefs.items():
+                pref_parts.append(f"{k}={v}")
+            lines.append(f"Preferences: {', '.join(pref_parts)}")
 
         consent = customer.get("consent", {})
         lines.append(f"Consent scope: {consent.get('scope', [])}")

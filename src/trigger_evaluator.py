@@ -7,8 +7,8 @@ via the Composer engine.
 
 from __future__ import annotations
 
+import re
 import time
-import uuid
 import logging
 from typing import Any
 
@@ -169,7 +169,12 @@ class TriggerEvaluator:
                 continue
 
             suppression_key = payload.get("suppression_key") or trigger_ctx.context_id
-            conversation_id = f"conv_{trigger_ctx.context_id}_{uuid.uuid4().hex[:8]}"
+            conversation_id = self._make_conversation_id(
+                trigger_ctx.context_id,
+                payload.get("merchant_id", ""),
+                payload.get("kind", ""),
+                now,
+            )
 
             action = TickAction(
                 conversation_id=conversation_id,
@@ -204,6 +209,37 @@ class TriggerEvaluator:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_conversation_id(
+        trigger_id: str,
+        merchant_id: str,
+        trigger_kind: str,
+        now: str,
+    ) -> str:
+        """Generate a meaningful, decodable conversation ID.
+
+        Format: conv_{merchant_id}_{trigger_kind}_{date_part}
+        Falls back to trigger_id-based ID if parsing fails.
+        """
+        # Extract a short date part from the 'now' timestamp
+        date_part = ""
+        try:
+            # Try to parse ISO date and extract week or date
+            dt = now[:10].replace("-", "")  # e.g., "20260501"
+            date_part = dt
+        except Exception:
+            date_part = "unknown"
+
+        # Shorten merchant_id for readability
+        m_short = merchant_id
+        if m_short and len(m_short) > 30:
+            m_short = m_short[:30]
+
+        # Clean trigger kind
+        kind_clean = re.sub(r"[^a-z0-9_]", "", trigger_kind.lower())
+
+        return f"conv_{m_short}_{kind_clean}_{date_part}"
 
     @staticmethod
     def _check_consent(trigger_kind: str, consent_scope: list[str]) -> bool:
