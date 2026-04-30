@@ -66,7 +66,7 @@ class LLMConfig:
         default_factory=lambda: os.environ.get("LLM_API_KEY", "")
     )
     model: str = field(
-        default_factory=lambda: os.environ.get("LLM_MODEL", "gpt-4o-mini")
+        default_factory=lambda: os.environ.get("LLM_MODEL", "gpt-4o")
     )
     timeout: float = 25.0  # seconds — per-call budget for LLM requests
 

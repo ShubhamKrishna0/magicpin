@@ -147,7 +147,7 @@ async def metadata() -> MetadataResponse:
     return MetadataResponse(
         team_name=TEAM_NAME,
         team_members=TEAM_MEMBERS,
-        model="gpt-4o-mini",
+        model="gpt-4o",
         approach=APPROACH,
         contact_email=CONTACT_EMAIL,
         version=VERSION,

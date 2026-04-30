@@ -416,9 +416,10 @@ COMPOSITION RULES (STRICT):
 5. If a price is mentioned, it MUST come from the merchant's active offers in the context
 6. Keep messages concise — WhatsApp readability (under 150 words)
 7. Do NOT repeat any message body that was already sent in this conversation
-8. Honor language preferences — use Hindi-English code-mix if the merchant/customer uses it
+8. MATCH THE LANGUAGE of the last message from the merchant/customer. If they wrote in English, reply in English. If Hindi, reply in Hindi. If mixed, reply in mixed.
 9. Cite at least 1-2 exact numbers from the context (views, calls, member count, prices)
-10. Address the owner by first name
+10. Address the owner by first name for merchant-facing, customer by name for customer-facing
+11. For customer-facing replies: use the merchant's business name, include the specific service/offer from context
 
 PREVIOUSLY SENT BODIES (do NOT repeat these):
 {sent_bodies}
