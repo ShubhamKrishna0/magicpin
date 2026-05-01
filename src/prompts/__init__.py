@@ -396,6 +396,7 @@ CUSTOMER_SCOPED_KINDS: frozenset[str] = frozenset({
     "chronic_refill_due",
     "trial_followup",
     "wedding_package_followup",
+    "appointment_tomorrow",
 })
 
 # ---------------------------------------------------------------------------
@@ -426,6 +427,26 @@ COMPOSITION RULES (STRICT):
 9. Cite at least 1-2 exact numbers from the context (views, calls, member count, prices)
 10. Address the owner by first name for merchant-facing, customer by name for customer-facing
 11. For customer-facing replies: use the merchant's business name, include the specific service/offer from context
+12. CRITICAL: Your reply MUST directly address what the merchant/customer just said. Read their last message word by word.
+
+=== REPLY EXAMPLES (study the SHAPE) ===
+
+EXAMPLE A — Merchant asks about compliance (regulation_change trigger):
+History: [BOT] DCI revised radiograph dose limits, deadline Dec 15... [MERCHANT] Got it doc — need help auditing my X-ray setup. We have an old D-speed film unit.
+Good reply:
+{{"action": "send", "body": "D-speed film won't meet the new 1.0 mSv limit — you'll need to switch to E-speed or go digital (RVG). I'll draft a 3-step compliance checklist: (1) audit current equipment, (2) source E-speed film or RVG quotes, (3) update your SOPs before Dec 15. Want me to send it now?", "cta": "binary_yes_no", "rationale": "Directly addressed D-speed concern, cited 1.0 mSv limit and Dec 15 deadline from trigger. Proposed concrete 3-step plan."}}
+
+EXAMPLE B — Customer books appointment (recall_due trigger):
+History: [BOT] Hi Priya, your 6-month cleaning recall is due... ₹299... Wed 5 Nov 6pm or Thu 6 Nov 5pm [CUSTOMER] Yes please book me for Wed 5 Nov, 6pm.
+Good reply:
+{{"action": "send", "body": "Done! Priya, aapki appointment confirm hai — Wed 5 Nov, 6pm, Dental Cleaning @ ₹299 at Dr. Meera's Dental Clinic, Lajpat Nagar. Kal ek reminder bhej dungi. Koi question ho toh batayein!", "cta": "none", "rationale": "Confirmed exact date/time/service/price from context. Used hi-en mix matching customer's language_pref. Referenced clinic name and locality."}}
+
+EXAMPLE C — Merchant wants to proceed (intent_committed, active_planning trigger):
+History: [BOT] I can draft a corporate thali package... [MERCHANT] Yes good idea, what would it look like
+Good reply:
+{{"action": "send", "body": "Drafting now. Here's your Corporate Thali Package for South Indian Cafe, HSR Layout: Tier 1 — Mini Thali @ ₹149 (rice + 2 curries + sambar), Tier 2 — Full Thali @ ₹199 (rice + 3 curries + sambar + dessert), Min order 20 thalis, free delivery within 5km of HSR Layout. Want me to make this live on your magicpin page?", "cta": "binary_yes_no", "rationale": "Produced complete artifact with pricing from catalog. Referenced locality. Single CTA at end."}}
+
+=== END REPLY EXAMPLES ===
 
 PREVIOUSLY SENT BODIES (do NOT repeat these):
 {sent_bodies}

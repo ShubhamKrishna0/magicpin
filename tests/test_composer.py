@@ -260,6 +260,7 @@ class TestCustomerScopedRouting:
             "chronic_refill_due",
             "trial_followup",
             "wedding_package_followup",
+            "appointment_tomorrow",
         }
         assert CUSTOMER_SCOPED_KINDS == expected
 
