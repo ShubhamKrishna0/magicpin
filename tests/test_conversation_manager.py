@@ -427,11 +427,12 @@ class TestAutoReplyEscalation:
         assert "auto" in result["rationale"].lower()
 
     @pytest.mark.asyncio
-    async def test_first_auto_reply_without_prior_bot_msg_sends_ack(self) -> None:
-        """Without a prior bot message, 1st auto-reply still sends acknowledgment."""
+    async def test_first_auto_reply_without_prior_bot_msg_waits(self) -> None:
+        """Without a prior bot message, 1st auto-reply goes straight to wait."""
         mgr = _make_manager()
         result = await _send_reply(mgr, "Thank you for contacting us")
-        assert result["action"] == "send"
+        assert result["action"] == "wait"
+        assert result["wait_seconds"] >= 14400
 
     @pytest.mark.asyncio
     async def test_second_auto_reply_waits_4_hours(self) -> None:
@@ -678,7 +679,7 @@ class TestAntiRepetition:
         """Wait actions don't have a body, so nothing should be added."""
         mgr = _make_manager()
         mgr.register_conversation("conv_1", "m1", None, "t1", "Hello!")
-        await _send_reply(mgr, "Thank you for contacting us", turn_number=1)  # 1st = send (ack)
+        await _send_reply(mgr, "Thank you for contacting us", turn_number=1)  # 1st with prior bot = send (ack)
         await _send_reply(mgr, "Thank you for contacting us", turn_number=2)  # 2nd = wait
         conv = mgr._conversations["conv_1"]
         # register_conversation adds 1 body, 1st auto-reply is send (adds body), 2nd is wait (no body)

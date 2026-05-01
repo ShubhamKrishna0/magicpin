@@ -331,7 +331,9 @@ class ConversationManager:
     def _handle_auto_reply(self, conversation: ConversationState) -> dict:
         """Apply auto-reply escalation logic (no LLM needed).
 
-        1st auto-reply: send brief acknowledgment (try to reach the human)
+        Escalation within the same conversation:
+        1st auto-reply with prior bot msg: send brief acknowledgment
+        1st auto-reply without prior bot msg: wait 4 hours (cold contact)
         2nd consecutive: wait 4 hours
         3rd+: end conversation
         """
@@ -339,8 +341,24 @@ class ConversationManager:
         streak = conversation.auto_reply_streak
 
         if streak == 1:
-            # First auto-reply: send a brief acknowledgment to try to
-            # reach the actual owner behind the auto-responder.
+            # Check if there's any prior bot message in this conversation
+            has_prior_bot_msg = any(
+                t.role == "bot" for t in conversation.turns
+            )
+
+            if not has_prior_bot_msg:
+                # Cold auto-reply — no point acknowledging, wait immediately
+                conversation.phase = "waiting"
+                return {
+                    "action": "wait",
+                    "wait_seconds": _AUTO_REPLY_WAIT_SECONDS,
+                    "rationale": (
+                        "Auto-reply detected on first contact — owner not available. "
+                        "Waiting 4 hours."
+                    ),
+                }
+
+            # Has prior bot message — try to reach the owner
             conversation.phase = "qualifying"
             return {
                 "action": "send",
