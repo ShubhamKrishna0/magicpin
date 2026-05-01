@@ -120,6 +120,9 @@ class Composer:
         Optional kwargs:
         - merchant: dict — merchant context payload for richer replies
         - category: dict — category context payload for voice matching
+        - trigger: dict — trigger context payload for topic continuity
+        - customer: dict — customer context payload for customer-facing replies
+        - is_customer_facing: bool — whether this is a customer-facing conversation
         """
         # Format conversation history
         history_text = self._format_conversation_history(conversation_history)
@@ -143,16 +146,48 @@ class Composer:
             sent_bodies=sent_bodies_text,
         )
 
-        # Enrich system prompt with merchant/category context if available
+        # Enrich system prompt with all available context
         merchant = kwargs.get("merchant")
         category = kwargs.get("category")
+        trigger = kwargs.get("trigger")
+        customer = kwargs.get("customer")
+        is_customer_facing = kwargs.get("is_customer_facing", False)
+
         context_parts: list[str] = []
         if merchant is not None:
             context_parts.append(self._build_merchant_block(merchant))
         if category is not None:
             context_parts.append(self._build_category_block(category))
+        if trigger is not None:
+            context_parts.append(self._build_trigger_block(trigger, category))
+        if customer is not None:
+            context_parts.append(self._build_customer_block(customer))
+
         if context_parts:
-            system_prompt += "\n\nADDITIONAL CONTEXT:\n" + "\n\n".join(context_parts)
+            system_prompt += "\n\nAVAILABLE CONTEXT (use these facts in your reply):\n" + "\n\n".join(context_parts)
+
+        # Add customer-facing instructions
+        if is_customer_facing:
+            system_prompt += (
+                "\n\nCUSTOMER-FACING REPLY RULES:\n"
+                "- You are replying AS the merchant's business (NOT as Vera)\n"
+                "- Use the merchant's business name\n"
+                "- Address the customer by name\n"
+                "- Honor the customer's language preference\n"
+                "- Include specific service details and prices from the merchant's active offers\n"
+                "- For booking confirmations: confirm date, time, service, and price\n"
+            )
+
+        # Add trigger topic reminder to keep replies on-topic
+        if trigger is not None:
+            trigger_kind = trigger.get("kind", "")
+            system_prompt += (
+                f"\n\nORIGINAL TRIGGER TOPIC: {trigger_kind}\n"
+                "IMPORTANT: Your reply MUST stay on-topic with the original trigger. "
+                "If the merchant asked about X-ray setup (regulation_change trigger), "
+                "reply about X-ray compliance — NOT about marketing posts. "
+                "If the customer asked to book an appointment, confirm the booking details."
+            )
 
         user_prompt = "Compose the next reply in this conversation."
 

@@ -237,10 +237,16 @@ _TRIGGER_INSTRUCTIONS: dict[str, str] = {
         "IPL match happening today. You MUST:\n"
         "1. Include EXACT match details from trigger payload (teams, venue, time)\n"
         "2. Note whether it's a weeknight or weekend from trigger payload\n"
-        "3. Give a DATA-INFORMED recommendation (weekend = -12% dine-in, push delivery)\n"
-        "4. Reference the merchant's existing active offers\n"
-        "5. Offer to draft specific deliverables (Swiggy banner, Insta story)\n"
-        "Compulsion levers: specificity (match data) + contrarian insight (skip promo, push delivery)"
+        "3. Give a DATA-INFORMED recommendation:\n"
+        "   - Restaurants: weeknight IPL = -12% dine-in, push delivery bundles\n"
+        "   - Salons: match-day = lower footfall, push pre-match grooming slots\n"
+        "   - Gyms: match-day = lower attendance, push morning slots\n"
+        "4. Reference the merchant's existing active offers and locality\n"
+        "5. Offer to draft specific deliverables (Swiggy banner, Insta story, WhatsApp status)\n"
+        "6. If payload has limited data, use the match event as a hook and tie it to the merchant's category\n"
+        "Compulsion levers: specificity (match data) + contrarian insight (skip promo, push delivery)\n"
+        "IMPORTANT: Even if payload is minimal, ALWAYS compose a message. Use the match event "
+        "as a conversation hook tied to the merchant's business category and locality."
     ),
     "customer_lapsed_hard": (
         "Customer has lapsed (hard — 2+ months). Set send_as='merchant_on_behalf'. You MUST:\n"
@@ -439,16 +445,22 @@ REPLY_INTENT_COMMITTED_INSTRUCTIONS = (
     "2. Do NOT ask more qualifying questions\n"
     "3. Include measurable scope or deliverables (e.g., 'drafting for 40 patients', 'live in 10 min')\n"
     "4. Use words like 'done', 'sending', 'drafting', 'here', 'confirm', 'proceed'\n"
-    "5. Reference specific numbers from the merchant's context (customer count, offer details)"
+    "5. Reference specific numbers from the merchant's context (customer count, offer details)\n"
+    "6. STAY ON TOPIC — your action must relate to the ORIGINAL trigger topic in the conversation\n"
+    "7. If the merchant asked about X-ray compliance, draft a compliance checklist — NOT marketing posts\n"
+    "8. If the customer asked to book, confirm the booking with date/time/service/price"
 )
 
 REPLY_NORMAL_INSTRUCTIONS = (
     "Continue the conversation naturally. You MUST:\n"
-    "1. Build on what was discussed — reference specific details from the conversation\n"
-    "2. If the merchant asked a question, answer it directly with facts from the context\n"
-    "3. If they shared information, acknowledge it and propose a concrete next step\n"
-    "4. Include at least one specific number or fact from the merchant's context\n"
-    "5. NEVER fabricate prices, statistics, or data not in the provided context"
+    "1. READ the merchant's last message carefully and DIRECTLY address what they said\n"
+    "2. If they asked a question, answer it with facts from the context\n"
+    "3. If they shared information (e.g., 'we have D-speed film'), acknowledge it and give specific advice\n"
+    "4. STAY ON TOPIC with the original trigger — do NOT switch to unrelated topics\n"
+    "5. Include at least one specific number or fact from the merchant's context\n"
+    "6. NEVER fabricate prices, statistics, or data not in the provided context\n"
+    "7. Propose a concrete next step that YOU will do for them\n"
+    "8. For customer-facing: if they request a booking, confirm with date/time/service/price from context"
 )
 
 # ---------------------------------------------------------------------------

@@ -414,29 +414,24 @@ class TestNormalClassification:
 class TestAutoReplyEscalation:
     """Tests for the auto-reply escalation logic.
 
-    When a conversation has a prior bot message (registered via tick),
-    escalation follows: 1st→send, 2nd→wait, 3rd→end.
-
-    When there's NO prior bot message (cold auto-reply), the first
-    auto-reply immediately returns wait (no point acknowledging).
+    Escalation follows: 1st→send (acknowledge), 2nd→wait, 3rd→end.
     """
 
     @pytest.mark.asyncio
     async def test_first_auto_reply_with_prior_bot_msg_sends_ack(self) -> None:
-        """With a prior bot message, 1st auto-reply returns wait (detected)."""
+        """With a prior bot message, 1st auto-reply returns send (acknowledge)."""
         mgr = _make_manager()
         mgr.register_conversation("conv_1", "m1", None, "t1", "Hello merchant!")
         result = await _send_reply(mgr, "Thank you for contacting us")
-        assert result["action"] == "wait"
+        assert result["action"] == "send"
         assert "auto" in result["rationale"].lower()
 
     @pytest.mark.asyncio
-    async def test_first_auto_reply_without_prior_bot_msg_waits(self) -> None:
-        """Without a prior bot message, 1st auto-reply goes straight to wait."""
+    async def test_first_auto_reply_without_prior_bot_msg_sends_ack(self) -> None:
+        """Without a prior bot message, 1st auto-reply still sends acknowledgment."""
         mgr = _make_manager()
         result = await _send_reply(mgr, "Thank you for contacting us")
-        assert result["action"] == "wait"
-        assert result["wait_seconds"] >= 14400
+        assert result["action"] == "send"
 
     @pytest.mark.asyncio
     async def test_second_auto_reply_waits_4_hours(self) -> None:
@@ -474,7 +469,7 @@ class TestAutoReplyEscalation:
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         await _send_reply(mgr, "Tell me more about the offer", turn_number=2)
         result = await _send_reply(mgr, "Thank you for contacting us", turn_number=3)
-        assert result["action"] == "wait"  # 1st auto-reply after reset → wait
+        assert result["action"] == "send"  # 1st auto-reply after reset → send (ack)
 
     @pytest.mark.asyncio
     async def test_streak_resets_on_intent_message(self) -> None:
@@ -484,7 +479,7 @@ class TestAutoReplyEscalation:
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         await _send_reply(mgr, "let's do it", turn_number=2)
         result = await _send_reply(mgr, "Thank you for contacting us", turn_number=3)
-        assert result["action"] == "wait"  # streak was reset, 1st auto-reply → wait
+        assert result["action"] == "send"  # streak was reset, 1st auto-reply → send
 
     @pytest.mark.asyncio
     async def test_auto_reply_escalation_phase_transitions(self) -> None:
@@ -493,10 +488,10 @@ class TestAutoReplyEscalation:
         mgr.register_conversation("conv_1", "m1", None, "t1", "Hello!")
         await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
         conv = mgr._conversations["conv_1"]
-        assert conv.phase == "waiting"  # 1st auto-reply → waiting
+        assert conv.phase == "qualifying"  # 1st auto-reply → qualifying (trying to reach owner)
 
         await _send_reply(mgr, "Thank you for contacting us", turn_number=2)
-        assert conv.phase == "waiting"  # 2nd → still waiting
+        assert conv.phase == "waiting"  # 2nd → waiting
 
         await _send_reply(mgr, "Thank you for contacting us", turn_number=3)
         assert conv.phase == "ended"  # 3rd → ended
@@ -683,11 +678,11 @@ class TestAntiRepetition:
         """Wait actions don't have a body, so nothing should be added."""
         mgr = _make_manager()
         mgr.register_conversation("conv_1", "m1", None, "t1", "Hello!")
-        await _send_reply(mgr, "Thank you for contacting us", turn_number=1)
-        await _send_reply(mgr, "Thank you for contacting us", turn_number=2)
+        await _send_reply(mgr, "Thank you for contacting us", turn_number=1)  # 1st = send (ack)
+        await _send_reply(mgr, "Thank you for contacting us", turn_number=2)  # 2nd = wait
         conv = mgr._conversations["conv_1"]
-        # register_conversation adds 1 body, both auto-replies are wait (no body tracking)
-        assert len(conv.sent_bodies) == 1
+        # register_conversation adds 1 body, 1st auto-reply is send (adds body), 2nd is wait (no body)
+        assert len(conv.sent_bodies) == 2
 
 
 # ===========================================================================

@@ -331,45 +331,28 @@ class ConversationManager:
     def _handle_auto_reply(self, conversation: ConversationState) -> dict:
         """Apply auto-reply escalation logic (no LLM needed).
 
-        1st auto-reply in conversation: send acknowledgment
+        1st auto-reply: send brief acknowledgment (try to reach the human)
         2nd consecutive: wait 4 hours
         3rd+: end conversation
-
-        Special case: if this is the very first message in the conversation
-        (no prior bot message exists), the auto-reply is responding to a
-        message we sent in a previous conversation. Escalate faster by
-        treating it as a wait on the first occurrence.
         """
         conversation.auto_reply_streak += 1
-
-        # Check if there's any prior bot message in this conversation
-        has_prior_bot_msg = any(
-            t.role == "bot" for t in conversation.turns
-        )
-
-        # If no prior bot message, this auto-reply is responding to a
-        # message from a different conversation — escalate immediately
-        if not has_prior_bot_msg and conversation.auto_reply_streak == 1:
-            conversation.phase = "waiting"
-            return {
-                "action": "wait",
-                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS,
-                "rationale": (
-                    "Auto-reply detected on first contact — owner not available. "
-                    "Waiting 4 hours."
-                ),
-            }
-
         streak = conversation.auto_reply_streak
 
         if streak == 1:
-            conversation.phase = "waiting"
+            # First auto-reply: send a brief acknowledgment to try to
+            # reach the actual owner behind the auto-responder.
+            conversation.phase = "qualifying"
             return {
-                "action": "wait",
-                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS,
+                "action": "send",
+                "body": (
+                    "Samajh gayi — yeh auto-reply lag raha hai. "
+                    "Kya owner/manager directly dekh sakte hain? "
+                    "Sirf 2 min ka kaam hai."
+                ),
+                "cta": "open_ended",
                 "rationale": (
-                    "Detected WhatsApp Business auto-reply. "
-                    "Owner likely unavailable — waiting 4 hours before retry."
+                    "First auto-reply detected. Sending brief acknowledgment "
+                    "to try reaching the actual owner."
                 ),
             }
 
@@ -377,20 +360,20 @@ class ConversationManager:
             conversation.phase = "waiting"
             return {
                 "action": "wait",
-                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS * 2,
+                "wait_seconds": _AUTO_REPLY_WAIT_SECONDS,
                 "rationale": (
                     "Second consecutive auto-reply — owner still unavailable. "
-                    "Extending wait to 8 hours."
+                    "Waiting 4 hours before retry."
                 ),
             }
 
-        # 3rd+ consecutive auto-reply
+        # 3rd+ consecutive auto-reply — end
         conversation.phase = "ended"
         return {
             "action": "end",
             "rationale": (
-                "Auto-reply 3x in a row, no real reply. "
-                "Closing conversation."
+                "Auto-reply 3x in a row — no real reply. "
+                "Gracefully exiting. Best wishes!"
             ),
         }
 
@@ -405,13 +388,22 @@ class ConversationManager:
 
         if composer is not None:
             try:
-                # Look up merchant and category contexts for richer replies
+                # Look up merchant, category, trigger, and customer contexts
                 merchant_ctx = self._store.get("merchant", conversation.merchant_id)
                 category_ctx = None
+                trigger_ctx = None
+                customer_ctx = None
+
                 if merchant_ctx is not None:
                     cat_slug = merchant_ctx.payload.get("category_slug")
                     if cat_slug:
                         category_ctx = self._store.get("category", cat_slug)
+
+                if conversation.trigger_id:
+                    trigger_ctx = self._store.get("trigger", conversation.trigger_id)
+
+                if conversation.customer_id:
+                    customer_ctx = self._store.get("customer", conversation.customer_id)
 
                 result = await composer.compose_reply(
                     conversation_history=conversation.turns,
@@ -419,6 +411,9 @@ class ConversationManager:
                     sent_bodies=conversation.sent_bodies,
                     merchant=merchant_ctx.payload if merchant_ctx else None,
                     category=category_ctx.payload if category_ctx else None,
+                    trigger=trigger_ctx.payload if trigger_ctx else None,
+                    customer=customer_ctx.payload if customer_ctx else None,
+                    is_customer_facing=conversation.customer_id is not None,
                 )
                 return result
             except Exception:
@@ -466,13 +461,22 @@ class ConversationManager:
 
         if composer is not None:
             try:
-                # Look up merchant and category contexts for richer replies
+                # Look up merchant, category, trigger, and customer contexts
                 merchant_ctx = self._store.get("merchant", conversation.merchant_id)
                 category_ctx = None
+                trigger_ctx = None
+                customer_ctx = None
+
                 if merchant_ctx is not None:
                     cat_slug = merchant_ctx.payload.get("category_slug")
                     if cat_slug:
                         category_ctx = self._store.get("category", cat_slug)
+
+                if conversation.trigger_id:
+                    trigger_ctx = self._store.get("trigger", conversation.trigger_id)
+
+                if conversation.customer_id:
+                    customer_ctx = self._store.get("customer", conversation.customer_id)
 
                 result = await composer.compose_reply(
                     conversation_history=conversation.turns,
@@ -480,6 +484,9 @@ class ConversationManager:
                     sent_bodies=conversation.sent_bodies,
                     merchant=merchant_ctx.payload if merchant_ctx else None,
                     category=category_ctx.payload if category_ctx else None,
+                    trigger=trigger_ctx.payload if trigger_ctx else None,
+                    customer=customer_ctx.payload if customer_ctx else None,
+                    is_customer_facing=conversation.customer_id is not None,
                 )
                 return result
             except Exception:
